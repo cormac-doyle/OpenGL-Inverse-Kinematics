@@ -67,6 +67,7 @@
     <ClInclude Include="assimp\include\assimp\vector2.h" />
     <ClInclude Include="assimp\include\assimp\vector3.h" />
     <ClInclude Include="assimp\include\assimp\version.h" />
+    <ClInclude Include="main.h" />
     <ClInclude Include="utils\vbo.h" />
     <ClInclude Include="utils\shaders.h" />
     <ClInclude Include="utils\mesh.h" />

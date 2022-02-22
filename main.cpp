@@ -25,10 +25,12 @@
 #include "glm/gtx/string_cast.hpp"
 
 #include <cmath>
+#include <map>
 
 #include "utils/mesh.h"
 #include "utils/shaders.h"
 #include "utils/vbo.h"
+#include "main.h"
 
 
 
@@ -40,6 +42,7 @@ MESH TO LOAD
 #define MESH_BODY "models/bodyAndhead.dae"
 #define MESH_UPPER_ARM "models/upperArm.dae"
 #define MESH_LOWER_ARM "models/lowerArm.dae"
+#define MESH_HAND "models/hand.dae"
 #define MESH_TARGET "models/target.dae"
 
 /*----------------------------------------------------------------------------
@@ -52,8 +55,8 @@ using namespace std;
 GLuint shaderProgramID;
 
 unsigned int mesh_vao = 0;
-int width = 800;
-int height = 600;
+int width = 1200;
+int height = 1200;
 
 
 GLfloat rotate_x = 0.0f;
@@ -64,19 +67,25 @@ float upper_arm_length = 1.5f;
 float lower_arm_length = 1.0f;
 float total_arm_length = 2.5f;
 
-glm::vec3 translate_upper_arm = glm::vec3(-1.0f, 1.0f, 0.0f);
+glm::vec3 translate_upper_arm = glm::vec3(-1.0f, 0.0f, 0.0f);
 glm::vec3 translate_lower_arm = glm::vec3(-1.5f, 0.0f, 0.0f);
+glm::vec3 translate_hand = glm::vec3(-1.0f, 0.0f, 0.0f);
+
 
 
 glm::vec3 rotate_upper_arm = glm::vec3(0.0f, 0.0f, 0.0f);
 glm::vec3 rotate_lower_arm = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 rotate_hand = glm::vec3(0.0f, 0.0f, 0.0f);
 
-glm::vec3 translate_target = glm::vec3(-4.0f, 1.0f, 0.0f);
+
+glm::vec3 transform_target = glm::vec3(-5.0f, 0.0f, 0.0f);
 
 
 ModelData mesh_data;
 
-void loadUpperArm(glm::mat4& modelUpperArm, glm::mat4& modelBody, int matrix_location)
+bool CCD = false;
+
+void loadUpperArm(glm::mat4& modelUpperArm, int matrix_location)
 {
 	mesh_data = generateObjectBufferMesh(MESH_UPPER_ARM, shaderProgramID);
 	// Set up the child matrix
@@ -87,19 +96,16 @@ void loadUpperArm(glm::mat4& modelUpperArm, glm::mat4& modelBody, int matrix_loc
 
 
 
-	// Apply the root matrix to the child matrix
-	modelUpperArm = modelBody * modelUpperArm;
-
 	// Update the appropriate uniform and draw the mesh again
 	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, glm::value_ptr(modelUpperArm));
 	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
 }
 
-void loadLowerArm(glm::mat4& modelUpperArm, int matrix_location) {
+void loadLowerArm(glm::mat4& modelUpperArm, glm::mat4& modelLowerArm, int matrix_location) {
 	mesh_data = generateObjectBufferMesh(MESH_LOWER_ARM, shaderProgramID);
 	// Set up the child matrix
-	glm::mat4 modelLowerArm = glm::mat4(1.0f);
 	
+	modelLowerArm = glm::mat4(1.0f);
 
 	modelLowerArm = glm::translate(modelLowerArm, translate_lower_arm);
 	modelLowerArm = glm::rotate(modelLowerArm, (rotate_lower_arm.z), glm::vec3(0, 0, 1));
@@ -115,11 +121,32 @@ void loadLowerArm(glm::mat4& modelUpperArm, int matrix_location) {
 	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
 }
 
+void loadHand(glm::mat4& modelLowerArm, glm::mat4& modelHand,int matrix_location) {
+	mesh_data = generateObjectBufferMesh(MESH_HAND, shaderProgramID);
+	// Set up the child matrix
+
+	modelHand = glm::mat4(1.0f);
+
+	modelHand = glm::translate(modelHand, translate_hand);
+	modelHand = glm::rotate(modelHand, (rotate_hand.z), glm::vec3(0, 0, 1));
+
+	
+	//modelUpperArm = glm::rotate(modelUpperArm, glm::radians(10.f), glm::vec3(0, 0, 1));
+
+	// Apply the root matrix to the child matrix
+	modelHand = modelLowerArm * modelHand;
+
+	// Update the appropriate uniform and draw the mesh again
+	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, glm::value_ptr(modelHand));
+	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
+}
+
 void loadBody(glm::mat4& modelBody, int matrix_location)
 {
 	mesh_data = generateObjectBufferMesh(MESH_BODY, shaderProgramID);
 
 	modelBody = glm::mat4(1.0f);
+	modelBody = glm::translate(modelBody,glm::vec3(0.0f,-1.0f,0.0f));
 	
 	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, glm::value_ptr(modelBody));
 	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
@@ -131,11 +158,16 @@ void loadTarget(int matrix_location)
 
 	glm::mat4 modelTarget = glm::mat4(1.0f);
 
-	modelTarget = glm::translate(modelTarget, translate_target);
+	modelTarget = glm::translate(modelTarget, transform_target);
 
 	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, glm::value_ptr(modelTarget));
 	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
 }
+
+glm::mat4 modelUpperArm;
+glm::mat4 modelLowerArm;
+glm::mat4 modelHand;
+
 
 void display() {
 
@@ -158,7 +190,7 @@ void display() {
 	glm::mat4 view = glm::mat4(1.0f);
 	glm::mat4 persp_proj = glm::perspective(45.0f, (float)width / (float)height, 0.1f, 1000.0f);
 	
-	view = glm::translate(view, glm::vec3(2.0f, 0.0, -7.0f));
+	view = glm::translate(view, glm::vec3(1.0f, 0.0, -8.0f));
 
 	// update uniforms & draw
 	glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, glm::value_ptr(persp_proj));
@@ -166,33 +198,43 @@ void display() {
 
 	loadTarget(matrix_location);
 
-	glm::mat4 modelPlane;
-	loadBody(modelPlane, matrix_location);
+	if (!CCD) {
+		glm::mat4 modelBody;
+		loadBody(modelBody, matrix_location);
+	}
+	
 
-	glm::mat4 modelUpperArm;
-	loadUpperArm(modelUpperArm, modelPlane, matrix_location);
+	
+	loadUpperArm(modelUpperArm, matrix_location);
 
-	loadLowerArm(modelUpperArm, matrix_location);
+	
+	loadLowerArm(modelUpperArm, modelLowerArm, matrix_location);
+
+	if (CCD) {
+		loadHand(modelLowerArm, modelHand ,matrix_location);
+	}
 
 
 	glutSwapBuffers();
 }
 int i = 0;
 void calcIKUnreachable() {
-	
+	rotate_hand.z = 0.0f;
 	rotate_lower_arm.z = 0.0f;
-	rotate_upper_arm.z = glm::acos((translate_upper_arm.x-translate_target.x)/ glm::distance(translate_upper_arm, translate_target));
+
+
+	rotate_upper_arm.z = glm::acos((translate_upper_arm.x-transform_target.x)/ glm::distance(translate_upper_arm, transform_target));
 
 	
 	if (i % 100 == 0) {
-		std::cout << glm::distance(translate_upper_arm, translate_target) << std::endl;
+		//std::cout << glm::distance(translate_upper_arm, translate_target) << std::endl;
 	}
 }
 
 void calcIKReachable() {
-	float x = translate_upper_arm.x - translate_target.x;
-	float y = translate_upper_arm.y - translate_target.y;
-	float dist = glm::distance(translate_target, translate_upper_arm);
+	float x = translate_upper_arm.x - transform_target.x;
+	float y = translate_upper_arm.y - transform_target.y;
+	float dist = glm::distance(transform_target, translate_upper_arm);
 	float thetaT = glm::acos(x / dist);
 
 	//upper arm angle
@@ -207,12 +249,94 @@ void calcIKReachable() {
 
 	rotate_lower_arm.z = glm::acos(numerator/denominator) + glm::radians(180.0f);
 	
-	if (i % 100 == 0) {
-		std::cout << rotate_upper_arm.z << std::endl;
+
+}
+
+
+
+
+void calcAngle(float& rotation,glm::vec3& transformStart, glm::vec3& transformEnd)
+{
+	float dist = glm::distance(transformStart, transformEnd);
+	
+
+	if (transformStart.y< transformEnd.y) {
+
+		rotation = -glm::acos((transformStart.x - transformEnd.x) / dist);
+
 	}
+	else {
+		rotation = glm::acos((transformStart.x - transformEnd.x) / dist);
+
+	}
+
+}
+
+
+
+glm::vec3* rotations[] = { &rotate_upper_arm, &rotate_lower_arm, &rotate_hand };
+glm::vec3* transforms[] = { &translate_upper_arm, &translate_lower_arm, &translate_hand };
+float handLength = 0.8f;
+
+void calcEndOfChainTransform(glm::vec3& endOfChainTransform, glm::vec3 handTransform) {
+	float xPos = -handLength * glm::cos((*rotations[2]).z + (*rotations[1]).z + (*rotations[0]).z) + handTransform.x;
+	float yPos = -handLength * glm::sin((*rotations[2]).z + (*rotations[1]).z + (*rotations[0]).z) + handTransform.y;
+
+	endOfChainTransform = glm::vec3(xPos, yPos, 0.0f);
+}
+
+
+
+void calcCCD(int frame_number) {
+	 glm::vec3 link2(modelHand[3]);
+	 glm::vec3 link1(modelLowerArm[3]);
+	 glm::vec3 link0(modelUpperArm[3]);
+
+	 glm::vec3 target_transform = transform_target;
+
+	 glm::vec3 endOfChainTransform;
+	 float endOfChainRotation = 0.0f;
+	 calcEndOfChainTransform(endOfChainTransform, link2);
+	 
+	
+	
+	if (frame_number == 0) {
+
+		float handRotation;
+		calcAngle(handRotation, link2, target_transform);
+		calcAngle(endOfChainRotation, link2, endOfChainTransform);
+		float rotateBy = handRotation - endOfChainRotation;
+
+		(*rotations[2]).z += rotateBy;
+
+	}
+
+	if (frame_number == 1) {
+		
+		float lowerArmRotation;
+		calcAngle(lowerArmRotation, link1, target_transform);
+		calcAngle(endOfChainRotation, link1, endOfChainTransform);
+
+		float rotateBy = (lowerArmRotation - endOfChainRotation);
+
+		(*rotations[1]).z += rotateBy ;
+	}
+
+	if (frame_number == 2) {
+		float upperArmRotation;
+		calcAngle(upperArmRotation, link0, target_transform);
+		calcAngle(endOfChainRotation, link0, endOfChainTransform);
+
+		float rotateBy;
+		rotateBy = ( upperArmRotation - endOfChainRotation);
+		(*rotations[0]).z += rotateBy;
+
+	}
+
 }
 
 float direction = -1.0f;
+int frame_number = 0;
 void updateScene() {
 
 	static DWORD last_time = 0;
@@ -222,14 +346,24 @@ void updateScene() {
 	float delta = (curr_time - last_time) * 0.001f;
 	last_time = curr_time;
 
-	if (glm::distance(translate_upper_arm, translate_target) >= total_arm_length) {
-		calcIKUnreachable();
+	if (!CCD) {
+		if (glm::distance(translate_upper_arm, transform_target) >= total_arm_length) {
+			calcIKUnreachable();
+		}
+		else {
+			calcIKReachable();
+		}
 	}
 	else {
-		calcIKReachable();
-	}
+			calcCCD(frame_number);
 
-	i++;
+	}
+	
+
+	frame_number++;
+	if (frame_number == 3) {
+		frame_number = 0;
+	}
 	// Draw the next frame
 	glutPostRedisplay();
 }
@@ -248,16 +382,24 @@ void init()
 float translate_speed = 0.1f;
 void keypress(unsigned char key, int x, int y) {
 	if (key == 'w') {
-		translate_target.y += translate_speed;
+		transform_target.y += translate_speed;
 	}
 	if (key == 'a') {
-		translate_target.x -= translate_speed;
+		transform_target.x -= translate_speed;
 	}
 	if (key == 's') {
-		translate_target.y -= translate_speed;
+		transform_target.y -= translate_speed;
 	}
 	if (key == 'd') {
-		translate_target.x += translate_speed;
+		transform_target.x += translate_speed;
+	}
+	if (key == ' ') {
+		if (CCD) {
+			CCD = false;
+		}
+		else {
+			CCD = true;
+		}
 	}
 	
 }
