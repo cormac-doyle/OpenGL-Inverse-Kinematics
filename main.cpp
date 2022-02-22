@@ -33,6 +33,8 @@
 #include "main.h"
 
 
+#include <numeric>
+
 
 /*----------------------------------------------------------------------------
 MESH TO LOAD
@@ -276,9 +278,17 @@ void calcAngle(float& rotation,glm::vec3& transformStart, glm::vec3& transformEn
 
 float handLength = 0.8f;
 
-void calcEndOfChainTransform(glm::vec3& endOfChainTransform, glm::vec3 handTransform, glm::vec3* linkLocalRotations[]) {
-	float xPos = -handLength * glm::cos((*linkLocalRotations[2]).z + (*linkLocalRotations[1]).z + (*linkLocalRotations[0]).z) + handTransform.x;
-	float yPos = -handLength * glm::sin((*linkLocalRotations[2]).z + (*linkLocalRotations[1]).z + (*linkLocalRotations[0]).z) + handTransform.y;
+
+void calcEndOfChainTransform(glm::vec3& endOfChainTransform, glm::vec3 handTransform, glm::vec3* linkLocalRotations[], int arr_size) {
+
+
+	float localRotationsSum = 0.0f;
+	for (int i = 0; i < arr_size; i++) {
+		localRotationsSum += (*linkLocalRotations[i]).z;
+	}
+	
+	float xPos = -handLength * glm::cos(localRotationsSum) + handTransform.x;
+	float yPos = -handLength * glm::sin(localRotationsSum) + handTransform.y;
 
 	endOfChainTransform = glm::vec3(xPos, yPos, 0.0f);
 }
@@ -290,50 +300,24 @@ void calcCCD(int frame_number) {
 	 glm::vec3 lowerArmTransform(modelLowerArm[3]);
 	 glm::vec3 upperArmTransform(modelUpperArm[3]);
 
+	 int number_of_links = 3;
 	 glm::vec3* linkGlobalTransforms[] = { &handTransform ,&lowerArmTransform, &upperArmTransform };
-	 glm::vec3* linkLocalRotations[] = { &rotate_upper_arm, &rotate_lower_arm, &rotate_hand };
-
+	 glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm, &rotate_upper_arm  };
 
 	 glm::vec3 target_transform = transform_target;
 
 	 glm::vec3 endOfChainTransform;
 	 float endOfChainRotation = 0.0f;
-	 calcEndOfChainTransform(endOfChainTransform, handTransform, linkLocalRotations);
+	 calcEndOfChainTransform(endOfChainTransform, handTransform, linkLocalRotations, number_of_links);
 	 
-	
-	
-	if (frame_number == 0) {
 
-		float handRotation;
-		calcAngle(handRotation, handTransform, target_transform);
-		calcAngle(endOfChainRotation, handTransform, endOfChainTransform);
-		float rotateBy = handRotation - endOfChainRotation;
+	float targetRotation;
+	calcAngle(targetRotation, (*linkGlobalTransforms[frame_number]), target_transform);
+	calcAngle(endOfChainRotation, (*linkGlobalTransforms[frame_number]), endOfChainTransform);
+	float rotateBy = targetRotation - endOfChainRotation;
 
-		(*linkLocalRotations[2]).z += rotateBy;
+	(*linkLocalRotations[frame_number]).z += rotateBy;
 
-	}
-
-	if (frame_number == 1) {
-		
-		float lowerArmRotation;
-		calcAngle(lowerArmRotation, lowerArmTransform, target_transform);
-		calcAngle(endOfChainRotation, lowerArmTransform, endOfChainTransform);
-
-		float rotateBy = (lowerArmRotation - endOfChainRotation);
-
-		(*linkLocalRotations[1]).z += rotateBy ;
-	}
-
-	if (frame_number == 2) {
-		float upperArmRotation;
-		calcAngle(upperArmRotation, upperArmTransform, target_transform);
-		calcAngle(endOfChainRotation, upperArmTransform, endOfChainTransform);
-
-		float rotateBy;
-		rotateBy = ( upperArmRotation - endOfChainRotation);
-		(*linkLocalRotations[0]).z += rotateBy;
-
-	}
 
 }
 
