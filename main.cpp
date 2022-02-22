@@ -30,6 +30,7 @@
 #include "utils/mesh.h"
 #include "utils/shaders.h"
 #include "utils/vbo.h"
+#include "main.h"
 
 
 
@@ -77,7 +78,7 @@ glm::vec3 rotate_lower_arm = glm::vec3(0.0f, 0.0f, 0.0f);
 glm::vec3 rotate_hand = glm::vec3(0.0f, 0.0f, 0.0f);
 
 
-glm::vec3 translate_target = glm::vec3(-5.0f, 0.0f, 0.0f);
+glm::vec3 transform_target = glm::vec3(-5.0f, 0.0f, 0.0f);
 
 
 ModelData mesh_data;
@@ -157,7 +158,7 @@ void loadTarget(int matrix_location)
 
 	glm::mat4 modelTarget = glm::mat4(1.0f);
 
-	modelTarget = glm::translate(modelTarget, translate_target);
+	modelTarget = glm::translate(modelTarget, transform_target);
 
 	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, glm::value_ptr(modelTarget));
 	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
@@ -217,7 +218,9 @@ int i = 0;
 void calcIKUnreachable() {
 	rotate_hand.z = 0.0f;
 	rotate_lower_arm.z = 0.0f;
-	rotate_upper_arm.z = glm::acos((translate_upper_arm.x-translate_target.x)/ glm::distance(translate_upper_arm, translate_target));
+
+
+	rotate_upper_arm.z = glm::acos((translate_upper_arm.x-transform_target.x)/ glm::distance(translate_upper_arm, transform_target));
 
 	
 	if (i % 100 == 0) {
@@ -226,9 +229,9 @@ void calcIKUnreachable() {
 }
 
 void calcIKReachable() {
-	float x = translate_upper_arm.x - translate_target.x;
-	float y = translate_upper_arm.y - translate_target.y;
-	float dist = glm::distance(translate_target, translate_upper_arm);
+	float x = translate_upper_arm.x - transform_target.x;
+	float y = translate_upper_arm.y - transform_target.y;
+	float dist = glm::distance(transform_target, translate_upper_arm);
 	float thetaT = glm::acos(x / dist);
 
 	//upper arm angle
@@ -247,28 +250,138 @@ void calcIKReachable() {
 }
 
 
-glm::vec3* rotations[] = { &rotate_upper_arm, &rotate_lower_arm, &rotate_hand };
-glm::vec3* translates[] = { &translate_upper_arm, &translate_lower_arm, &translate_hand };
-
-void calcCCD() {
-	 glm::vec3 hand(modelHand[3]);
-
-	i = 2;
-	float x_target = hand.x - translate_target.x;
-	float y_target = hand.y - translate_target.y;
-
-	float dist =  glm::distance(hand, translate_target);
 
 
 
-	(*rotations[i]).z = glm::acos( x_target / dist) ;
 
+void calcAngle(float& rotation,glm::vec3& transformStart, glm::vec3& transformEnd)
+{
+	float dist = glm::distance(transformStart, transformEnd);
 	
-	std::cout << glm::to_string(modelHand) << std::endl;
+
+	if (transformStart.y< transformEnd.y) {
+
+		rotation = -glm::acos((transformStart.x - transformEnd.x) / dist);
+
+	}
+	else {
+		rotation = glm::acos((transformStart.x - transformEnd.x) / dist);
+
+	}
+
+}
+
+
+
+glm::vec3* rotations[] = { &rotate_upper_arm, &rotate_lower_arm, &rotate_hand };
+glm::vec3* transforms[] = { &translate_upper_arm, &translate_lower_arm, &translate_hand };
+float handLength = 0.8f;
+
+void calcEndOfChainTransform(glm::vec3& endOfChainTransform, glm::vec3 handTransform) {
+	float xPos = -handLength * glm::cos((*rotations[2]).z + (*rotations[1]).z + (*rotations[0]).z) + handTransform.x;
+	float yPos = -handLength * glm::sin((*rotations[2]).z + (*rotations[1]).z + (*rotations[0]).z) + handTransform.y;
+
+	endOfChainTransform = glm::vec3(xPos, yPos, 0.0f);
+}
+
+
+
+void calcCCD(int frame_number) {
+	 glm::vec3 handTransform(modelHand[3]);
+	 glm::vec3 lowerArmTransform(modelLowerArm[3]);
+	 glm::vec3 upperArmTransform(modelUpperArm[3]);
+
+	 glm::vec3 target_transform = transform_target;
+
+	 glm::vec3 endOfChainTransform;
+	 float endOfChainRotation = 0.0f;
+	 calcEndOfChainTransform(endOfChainTransform, handTransform);
+	 
+	i = 2;
+	
+	if (frame_number == 0) {
+		float handRotation;
+		calcAngle(handRotation, handTransform, target_transform);
+
+		(*rotations[2]).z = handRotation - (*rotations[1]).z - (*rotations[0]).z;
+
+
+
+	}
+
+	if (frame_number == 1) {
+		i = 1;
+		float lowerArmRotation;
+		calcAngle(lowerArmRotation, lowerArmTransform, target_transform);
+
+		
+
+		//endOfChainRotation -= (*rotations[1]).z;
+
+		calcAngle(endOfChainRotation, lowerArmTransform, endOfChainTransform);
+
+		std::cout << "endOfChainRotation" << std::endl;
+		std::cout << glm::degrees(endOfChainRotation) << std::endl;
+		std::cout << "endOfChainTransform" << std::endl;
+		std::cout << glm::to_string(endOfChainTransform) << std::endl;
+		std::cout << "lowerArmRotation" << std::endl;
+		std::cout << glm::degrees(lowerArmRotation) << std::endl;
+
+
+		float rotateBy = (lowerArmRotation - endOfChainRotation);
+
+		
+		//(*rotations[1]).z -= (*rotations[0]).z;
+
+		(*rotations[1]).z += rotateBy ;
+	}
+
+	if (frame_number == 2) {
+		float upperArmRotation;
+		calcAngle(upperArmRotation, upperArmTransform, target_transform);
+
+		endOfChainRotation;
+		calcAngle(endOfChainRotation, upperArmTransform, endOfChainTransform);
+
+		float rotateBy;
+		rotateBy = ( upperArmRotation - endOfChainRotation);
+		(*rotations[0]).z += rotateBy;
+
+	}
+
+	/*
+	 i = 1;
+	 float lowerArmRotation;
+	calcAngle(lowerArmRotation, lowerArmTransform, target_transform);
+
+	float endOfChainRotation;
+	calcAngle(endOfChainRotation, lowerArmTransform, endOfChainTransform);
+
+	float rotateBy = (-lowerArmRotation + endOfChainRotation);
+	(*rotations[1]).z = rotateBy  - (*rotations[0]).z;
+	 
+	
+	
+
+	calcEndOfChainTransform(endOfChainTransform, handTransform);
+
+	i = 0;
+	
+
+	*/
+
+	//(*rotations[1]) = (*rotations[1]) - (*rotations[0]);
+
+	//std::cout << frame_number % 100 << std::endl;
+	//std::cout << glm::degrees(upperArmRotation) << std::endl;
+
+	//std::cout << "endOfChainRotation" << std::endl;
+	//std::cout << glm::degrees(endOfChainRotation) << std::endl;
 
 }
 
 float direction = -1.0f;
+int frame_number = 0;
 void updateScene() {
 
 	static DWORD last_time = 0;
@@ -279,7 +392,7 @@ void updateScene() {
 	last_time = curr_time;
 
 	if (!CCD) {
-		if (glm::distance(translate_upper_arm, translate_target) >= total_arm_length) {
+		if (glm::distance(translate_upper_arm, transform_target) >= total_arm_length) {
 			calcIKUnreachable();
 		}
 		else {
@@ -287,17 +400,21 @@ void updateScene() {
 		}
 	}
 	else {
-		if (glm::distance(translate_upper_arm, translate_target) >= total_arm_length+0.8f) {
+		if (glm::distance(translate_upper_arm, transform_target) >= total_arm_length+0.8f) {
 			calcIKUnreachable();
 		}
 		else {
-			calcCCD();
+
+			calcCCD(frame_number);
 
 		}
 	}
 	
 
-	i++;
+	frame_number++;
+	if (frame_number == 3) {
+		frame_number = 0;
+	}
 	// Draw the next frame
 	glutPostRedisplay();
 }
@@ -316,16 +433,16 @@ void init()
 float translate_speed = 0.1f;
 void keypress(unsigned char key, int x, int y) {
 	if (key == 'w') {
-		translate_target.y += translate_speed;
+		transform_target.y += translate_speed;
 	}
 	if (key == 'a') {
-		translate_target.x -= translate_speed;
+		transform_target.x -= translate_speed;
 	}
 	if (key == 's') {
-		translate_target.y -= translate_speed;
+		transform_target.y -= translate_speed;
 	}
 	if (key == 'd') {
-		translate_target.x += translate_speed;
+		transform_target.x += translate_speed;
 	}
 	if (key == ' ') {
 		if (CCD) {
