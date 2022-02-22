@@ -87,7 +87,7 @@ glm::vec3 transform_target = glm::vec3(-5.0f, 0.0f, 0.0f);
 
 ModelData mesh_data;
 
-int CCD = 0;
+int CCD_mode = 0;
 
 void loadUpperArm(glm::mat4& modelUpperArm, int matrix_location)
 {
@@ -205,7 +205,7 @@ void display() {
 
 	loadTarget(matrix_location);
 
-	if (CCD==0) {
+	if (CCD_mode==0) {
 		glm::mat4 modelBody;
 		loadBody(modelBody, matrix_location);
 	}
@@ -216,14 +216,14 @@ void display() {
 
 	loadLowerArm(modelUpperArm, modelLowerArm1, matrix_location, translate_lower_arm1, rotate_lower_arm1);
 	
-	if (CCD == 2) {
+	if (CCD_mode == 2) {
 
 		loadLowerArm(modelLowerArm1, modelLowerArm2, matrix_location, translate_lower_arm2, rotate_lower_arm2);
 		loadHand(modelLowerArm2, modelHand, matrix_location);
 
 	}
 
-	if (CCD==1) {
+	if (CCD_mode==1) {
 		loadHand(modelLowerArm1, modelHand ,matrix_location);
 	}
 
@@ -337,18 +337,17 @@ void updateScene() {
 	float delta = (curr_time - last_time) * 0.001f;
 	last_time = curr_time;
 
-	if (CCD == 2 && transform_target.x == -5.0f) {
+	if (CCD_mode == 2 && transform_target.x == -5.0f) {
 		view_translate.z = -9.5f;
 		transform_target.x = -6.0f;
 	}
-	if(CCD == 0 && transform_target.x == -6.0f) {
+	if(CCD_mode == 0 && transform_target.x == -6.0f) {
 		view_translate.z = -8.0f;
 		transform_target.x = -5.0f;
-
 	}
 
 
-	if (CCD==0) {
+	if (CCD_mode==0) {
 		if (glm::distance(translate_upper_arm, transform_target) >= total_arm_length) {
 			calcIKUnreachable();
 		}
@@ -364,14 +363,14 @@ void updateScene() {
 			glm::vec3 upperArmTransform(modelUpperArm[3]);
 
 			
-			if (CCD == 1) {
+			if (CCD_mode == 1) {
 				glm::vec3* linkGlobalTransforms[] = { &handTransform ,&lowerArmTransform1, &upperArmTransform };
 				glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm1, &rotate_upper_arm };
 
 				calcCCD(frame_number, 3, linkGlobalTransforms, linkLocalRotations);
 
 			}
-			if (CCD == 2) {
+			if (CCD_mode == 2) {
 				glm::vec3* linkGlobalTransforms[] = { &handTransform , &lowerArmTransform2, &lowerArmTransform1, &upperArmTransform };
 				glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm2, &rotate_lower_arm1, &rotate_upper_arm };
 
@@ -386,7 +385,7 @@ void updateScene() {
 	
 
 	frame_number++;
-	if (frame_number == CCD + 2) {
+	if (frame_number == CCD_mode + 2) {
 		frame_number = 0;
 	}
 	// Draw the next frame
@@ -419,11 +418,11 @@ void keypress(unsigned char key, int x, int y) {
 		transform_target.x += translate_speed;
 	}
 	if (key == ' ') {
-		if (CCD==2) {
-			CCD = 0;
+		if (CCD_mode==2) {
+			CCD_mode = 0;
 		}
 		else {
-			CCD++;
+			CCD_mode++;
 		}
 	}
 	
