@@ -190,7 +190,7 @@ void display() {
 	glm::mat4 view = glm::mat4(1.0f);
 	glm::mat4 persp_proj = glm::perspective(45.0f, (float)width / (float)height, 0.1f, 1000.0f);
 	
-	view = glm::translate(view, glm::vec3(2.0f, 0.0, -7.0f));
+	view = glm::translate(view, glm::vec3(1.0f, 0.0, -8.0f));
 
 	// update uniforms & draw
 	glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, glm::value_ptr(persp_proj));
@@ -198,8 +198,11 @@ void display() {
 
 	loadTarget(matrix_location);
 
-	glm::mat4 modelBody;
-	loadBody(modelBody, matrix_location);
+	if (!CCD) {
+		glm::mat4 modelBody;
+		loadBody(modelBody, matrix_location);
+	}
+	
 
 	
 	loadUpperArm(modelUpperArm, matrix_location);
@@ -252,8 +255,6 @@ void calcIKReachable() {
 
 
 
-
-
 void calcAngle(float& rotation,glm::vec3& transformStart, glm::vec3& transformEnd)
 {
 	float dist = glm::distance(transformStart, transformEnd);
@@ -287,96 +288,50 @@ void calcEndOfChainTransform(glm::vec3& endOfChainTransform, glm::vec3 handTrans
 
 
 void calcCCD(int frame_number) {
-	 glm::vec3 handTransform(modelHand[3]);
-	 glm::vec3 lowerArmTransform(modelLowerArm[3]);
-	 glm::vec3 upperArmTransform(modelUpperArm[3]);
+	 glm::vec3 link2(modelHand[3]);
+	 glm::vec3 link1(modelLowerArm[3]);
+	 glm::vec3 link0(modelUpperArm[3]);
 
 	 glm::vec3 target_transform = transform_target;
 
 	 glm::vec3 endOfChainTransform;
 	 float endOfChainRotation = 0.0f;
-	 calcEndOfChainTransform(endOfChainTransform, handTransform);
+	 calcEndOfChainTransform(endOfChainTransform, link2);
 	 
-	i = 2;
+	
 	
 	if (frame_number == 0) {
+
 		float handRotation;
-		calcAngle(handRotation, handTransform, target_transform);
+		calcAngle(handRotation, link2, target_transform);
+		calcAngle(endOfChainRotation, link2, endOfChainTransform);
+		float rotateBy = handRotation - endOfChainRotation;
 
-		(*rotations[2]).z = handRotation - (*rotations[1]).z - (*rotations[0]).z;
-
-
+		(*rotations[2]).z += rotateBy;
 
 	}
 
 	if (frame_number == 1) {
-		i = 1;
-		float lowerArmRotation;
-		calcAngle(lowerArmRotation, lowerArmTransform, target_transform);
-
 		
-
-		//endOfChainRotation -= (*rotations[1]).z;
-
-		calcAngle(endOfChainRotation, lowerArmTransform, endOfChainTransform);
-
-		std::cout << "endOfChainRotation" << std::endl;
-		std::cout << glm::degrees(endOfChainRotation) << std::endl;
-		std::cout << "endOfChainTransform" << std::endl;
-		std::cout << glm::to_string(endOfChainTransform) << std::endl;
-		std::cout << "lowerArmRotation" << std::endl;
-		std::cout << glm::degrees(lowerArmRotation) << std::endl;
-
+		float lowerArmRotation;
+		calcAngle(lowerArmRotation, link1, target_transform);
+		calcAngle(endOfChainRotation, link1, endOfChainTransform);
 
 		float rotateBy = (lowerArmRotation - endOfChainRotation);
-
-		
-		//(*rotations[1]).z -= (*rotations[0]).z;
 
 		(*rotations[1]).z += rotateBy ;
 	}
 
 	if (frame_number == 2) {
 		float upperArmRotation;
-		calcAngle(upperArmRotation, upperArmTransform, target_transform);
-
-		endOfChainRotation;
-		calcAngle(endOfChainRotation, upperArmTransform, endOfChainTransform);
+		calcAngle(upperArmRotation, link0, target_transform);
+		calcAngle(endOfChainRotation, link0, endOfChainTransform);
 
 		float rotateBy;
 		rotateBy = ( upperArmRotation - endOfChainRotation);
 		(*rotations[0]).z += rotateBy;
 
 	}
-
-	/*
-	 i = 1;
-	 float lowerArmRotation;
-	calcAngle(lowerArmRotation, lowerArmTransform, target_transform);
-
-	float endOfChainRotation;
-	calcAngle(endOfChainRotation, lowerArmTransform, endOfChainTransform);
-
-	float rotateBy = (-lowerArmRotation + endOfChainRotation);
-	(*rotations[1]).z = rotateBy  - (*rotations[0]).z;
-	 
-	
-	
-
-	calcEndOfChainTransform(endOfChainTransform, handTransform);
-
-	i = 0;
-	
-
-	*/
-
-	//(*rotations[1]) = (*rotations[1]) - (*rotations[0]);
-
-	//std::cout << frame_number % 100 << std::endl;
-	//std::cout << glm::degrees(upperArmRotation) << std::endl;
-
-	//std::cout << "endOfChainRotation" << std::endl;
-	//std::cout << glm::degrees(endOfChainRotation) << std::endl;
 
 }
 
@@ -400,14 +355,8 @@ void updateScene() {
 		}
 	}
 	else {
-		if (glm::distance(translate_upper_arm, transform_target) >= total_arm_length+0.8f) {
-			calcIKUnreachable();
-		}
-		else {
-
 			calcCCD(frame_number);
 
-		}
 	}
 	
 
