@@ -297,20 +297,20 @@ float handLength = 0.8f;
 //based off whats seen in this video: https://www.youtube.com/shorts/MvuO9ZHGr6k
 //each frame a different link angle is calculated, this way no 'for' or 'while' loop is necessary and it results in a interpolated effect
 
-void calcCCD(int& frame_number, int number_of_links, glm::vec3* linkGlobalTransforms[], glm::vec3* linkLocalRotations[]) {
+void calcCCD(int& frame_number, int number_of_links, glm::vec3* linkGlobalTransforms[], float& rotateBy) {
 	glm::vec3 handTransform(modelHand[3]);
 	glm::vec3 target_transform = transform_target;
 	glm::vec3 endOfChainTransform(modelEndOfChain[3]);
 
 	float endOfChainRotation = 0.0f;
-	float rotateBy;
+	
 
 	float targetRotation;
 	calcAngle(targetRotation, (*linkGlobalTransforms[frame_number]), target_transform);
 	calcAngle(endOfChainRotation, (*linkGlobalTransforms[frame_number]), endOfChainTransform);
 	rotateBy = targetRotation - endOfChainRotation;
 
-	(*linkLocalRotations[frame_number]).z += rotateBy;
+	
 
 }
 
@@ -323,11 +323,15 @@ void incrementFrameNumber(int& frame_number, int number_of_links)
 }
 
 bool turnoff = false;
+bool interpolate = false;
+bool animate_target = false;
+
+int interpolation_frames = 4;
 int motionSpeed = 1;
 
 int frame_number = 0;
 
-
+int direc = -1.0f;
 void updateScene() {
 
 	static DWORD last_time = 0;
@@ -346,6 +350,23 @@ void updateScene() {
 		transform_target.x = -5.0f;
 	}
 
+	if (animate_target) {
+		transform_target.y = transform_target.x;
+
+
+		if (transform_target.x > 6.0f) {
+			direc = -1.0f;
+		}
+		if (transform_target.x < 6.0f) {
+			direc = 1.0f;
+		}
+		 
+		
+		transform_target.x += 0.025f * direc;
+
+		
+	}
+
 
 	if (CCD_mode == 0) {
 		if (glm::distance(translate_upper_arm, transform_target) >= total_arm_length) {
@@ -357,38 +378,65 @@ void updateScene() {
 	}
 	else {
 		if (frame_count % motionSpeed == 0) {
-			if (!turnoff) {
-				glm::vec3 handTransform(modelHand[3]);
-				glm::vec3 lowerArmTransform1(modelLowerArm1[3]);
-				glm::vec3 lowerArmTransform2(modelLowerArm2[3]);
-				glm::vec3 upperArmTransform(modelUpperArm[3]);
+			float rotateBy;
+			
+
+			
+			glm::vec3 handTransform(modelHand[3]);
+			glm::vec3 lowerArmTransform1(modelLowerArm1[3]);
+			glm::vec3 lowerArmTransform2(modelLowerArm2[3]);
+			glm::vec3 upperArmTransform(modelUpperArm[3]);
 
 
-				if (CCD_mode == 1) {
-					glm::vec3* linkGlobalTransforms[] = { &handTransform ,&lowerArmTransform1, &upperArmTransform };
-					glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm1, &rotate_upper_arm };
+			if (CCD_mode == 1) {
+				float targetRotations[3] = {0.0f};
+				glm::vec3* linkGlobalTransforms[] = { &handTransform ,&lowerArmTransform1, &upperArmTransform };
+				glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm1, &rotate_upper_arm };
 
-					calcCCD(frame_number, 3, linkGlobalTransforms, linkLocalRotations);
-
-
+				calcCCD(frame_number, 3, linkGlobalTransforms, rotateBy);
+				if (!turnoff) {
+					(*linkLocalRotations[frame_number]).z += rotateBy;
 				}
-				if (CCD_mode == 2) {
-					glm::vec3* linkGlobalTransforms[] = { &handTransform , &lowerArmTransform2, &lowerArmTransform1, &upperArmTransform };
-					glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm2, &rotate_lower_arm1, &rotate_upper_arm };
 
-					calcCCD(frame_number, 4, linkGlobalTransforms, linkLocalRotations);
+				targetRotations[frame_number] = (*linkLocalRotations[frame_number]).z + rotateBy;
 
-				}
 			}
+			if (CCD_mode == 2) {
+				float targetRotations[4] = { 0.0f };
+
+				glm::vec3* linkGlobalTransforms[] = { &handTransform , &lowerArmTransform2, &lowerArmTransform1, &upperArmTransform };
+				glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm2, &rotate_lower_arm1, &rotate_upper_arm };
+
+				calcCCD(frame_number, 4, linkGlobalTransforms, rotateBy);
+
+				if (!turnoff) {
+					(*linkLocalRotations[frame_number]).z += rotateBy;
+				}
+
+				targetRotations[frame_number] = (*linkLocalRotations[frame_number]).z + rotateBy;
+
+				if (interpolate) {
+
+					(*linkLocalRotations[frame_number]).z = targetRotations[frame_number];
+
+					interpolation_frames--;
+					if (interpolation_frames == 0) {
+						interpolate = false;
+						interpolation_frames = 1;
+					}
+
+				}
+
+
+			}
+			
 
 			frame_number++;
 			if (frame_number == CCD_mode + 2) {
 				frame_number = 0;
 			}
 		}
-		else {
-			//add interpolations and target rotations here
-		}
+		
 
 
 	}
@@ -448,6 +496,14 @@ void keypress(unsigned char key, int x, int y) {
 			turnoff = false;
 		}
 	}
+	if (key == 'i') {
+		if (!interpolate) {
+			interpolate = true;
+		}
+		else {
+			interpolate = false;
+		}
+	}
 
 	if (key == 'm') {
 		motionSpeed += 1.0f;
@@ -455,6 +511,15 @@ void keypress(unsigned char key, int x, int y) {
 	}
 	if (key == 'n') {
 		motionSpeed = 1.0f;
+	}
+
+	if (key == 'o') {
+		if (!animate_target) {
+			animate_target = true;
+		}
+		else {
+			animate_target = false;
+		}
 	}
 
 }
