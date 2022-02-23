@@ -332,7 +332,7 @@ int motionSpeed = 1;
 int frame_number = 0;
 
 int direc = 1;
-float radius = 5.05f;
+float radius = 2.1f;
 int radius_direc = 1;
 void updateScene() {
 
@@ -355,34 +355,7 @@ void updateScene() {
 	
 	if (animate_target) {
 
-		if (radius < 2.0f) {
-			radius_direc = +1;
-		}
-		if (radius > 5.0f) {
-			radius_direc = -1;
-		}
-		
-
-		std::cout << transform_target.y << std::endl;
-		std::cout << transform_target.x << std::endl;
-		std::cout << radius << std::endl;
-
-		float speed = abs(transform_target.y / 50);
-
-		transform_target.x += speed * direc;
-
-
-
-
-		if (abs(transform_target.x) > radius) {
-			transform_target.x = (radius - 0.0001f)*direc;
-			direc *= -1;
-		}
-
-		
-		transform_target.y = sqrt(pow(radius, 2) - pow(transform_target.x, 2)) * direc;
-
-		radius += 0.0025f * radius_direc;
+		animateTarget();
 
 
 	}
@@ -447,7 +420,6 @@ void updateScene() {
 
 				}
 
-
 			}
 			
 
@@ -465,6 +437,35 @@ void updateScene() {
 
 	// Draw the next frame
 	glutPostRedisplay();
+}
+
+void animateTarget()
+{
+	if (radius < 2.0f) {
+		radius_direc = +1;
+	}
+	if (radius > 5.0f) {
+		radius_direc = -1;
+	}
+
+
+	std::cout << transform_target.y << std::endl;
+	std::cout << transform_target.x << std::endl;
+	std::cout << radius << std::endl;
+
+	float speed = abs(transform_target.y / 200);
+
+	transform_target.x += speed * direc;
+
+	if (abs(transform_target.x) > radius) {
+		transform_target.x = (radius - 0.0001f) * direc;
+		direc *= -1;
+	}
+
+
+	transform_target.y = sqrt(pow(radius, 2) - pow(transform_target.x, 2)) * direc;
+
+	//radius += 0.002f * radius_direc;
 }
 
 
@@ -534,6 +535,7 @@ void keypress(unsigned char key, int x, int y) {
 	}
 
 	if (key == 'o') {
+		
 		if (!animate_target) {
 			animate_target = true;
 		}
