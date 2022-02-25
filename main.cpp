@@ -46,6 +46,8 @@ MESH TO LOAD
 #define MESH_LOWER_ARM "models/lowerArm.dae"
 #define MESH_HAND "models/hand.dae"
 #define MESH_TARGET "models/target.dae"
+#define MESH_PLANE "models/plane.dae"
+
 
 /*----------------------------------------------------------------------------
 ----------------------------------------------------------------------------*/
@@ -57,8 +59,8 @@ using namespace std;
 GLuint shaderProgramID;
 
 unsigned int mesh_vao = 0;
-int width = 1350;
-int height = 1350;
+int width = 1250;
+int height = 1250;
 
 
 GLfloat rotate_x = 0.0f;
@@ -98,6 +100,9 @@ glm::mat4 modelLowerArm2;
 glm::mat4 modelHand;
 glm::mat4 modelEndOfChain;
 
+
+
+
 void loadUpperArm(glm::mat4& modelUpperArm, int matrix_location)
 {
 	mesh_data = generateObjectBufferMesh(MESH_UPPER_ARM, shaderProgramID);
@@ -105,7 +110,9 @@ void loadUpperArm(glm::mat4& modelUpperArm, int matrix_location)
 	modelUpperArm = glm::mat4(1.0f);
 	modelUpperArm = glm::translate(modelUpperArm, translate_upper_arm);
 
-	modelUpperArm = glm::rotate(modelUpperArm, rotate_upper_arm.z, glm::vec3(0, 0, 1));
+	glm::quat quaternion = glm::quat(rotate_upper_arm);
+	modelUpperArm = modelUpperArm * glm::toMat4(quaternion);
+
 
 
 
@@ -121,7 +128,9 @@ void loadLowerArm(glm::mat4& modelParent, glm::mat4& modelLowerArm, int matrix_l
 	modelLowerArm = glm::mat4(1.0f);
 
 	modelLowerArm = glm::translate(modelLowerArm, translate_lower);
-	modelLowerArm = glm::rotate(modelLowerArm, (rotate_lower.z), glm::vec3(0, 0, 1));
+	glm::quat quaternion = glm::quat(rotate_lower);
+	modelLowerArm = modelLowerArm * glm::toMat4(quaternion);
+
 
 
 	//modelUpperArm = glm::rotate(modelUpperArm, glm::radians(10.f), glm::vec3(0, 0, 1));
@@ -141,8 +150,14 @@ void loadHand(glm::mat4& modelLowerArm, glm::mat4& modelHand, int matrix_locatio
 	modelHand = glm::mat4(1.0f);
 	modelEndOfChain = glm::mat4(1.0f);
 
+	//modelHand = glm::rotate(modelHand, (rotate_hand.z), glm::vec3(0, 0, 1));
+	//modelHand = glm::rotate(modelHand, (rotate_hand.y), glm::vec3(0, 1, 0));
+
+
 	modelHand = glm::translate(modelHand, translate_hand);
-	modelHand = glm::rotate(modelHand, (rotate_hand.z), glm::vec3(0, 0, 1));
+
+	glm::quat quaternion = glm::quat(rotate_hand);
+	modelHand = modelHand * glm::toMat4(quaternion);
 
 
 	//modelUpperArm = glm::rotate(modelUpperArm, glm::radians(10.f), glm::vec3(0, 0, 1));
@@ -183,6 +198,20 @@ void loadTarget(int matrix_location)
 	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
 }
 
+void loadPlane(int matrix_location)
+{
+	mesh_data = generateObjectBufferMesh(MESH_PLANE, shaderProgramID);
+
+	glm::mat4 modelPlane = glm::mat4(1.0f);
+
+	modelPlane = glm::translate(modelPlane, glm::vec3(0.0f,-5.0f,0.0f));
+	modelPlane = glm::scale(modelPlane, glm::vec3(5.0f, 5.0f, 5.0f));
+
+
+	glUniformMatrix4fv(matrix_location, 1, GL_FALSE, glm::value_ptr(modelPlane));
+	glDrawArrays(GL_TRIANGLES, 0, mesh_data.mPointCount);
+}
+
 
 
 glm::vec3 view_translate = glm::vec3(0.0f, 0.0, -8.0f);
@@ -208,13 +237,24 @@ void display() {
 	glm::mat4 persp_proj = glm::perspective(45.0f, (float)width / (float)height, 0.1f, 1000.0f);
 
 
+	if (CCD_mode == 2) {
+		view = glm::rotate(view, glm::radians(45.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
-	view = glm::translate(view, view_translate);
+		view = glm::translate(view, glm::vec3(-8.0f, -8.0f, -8.0f));
+
+
+	}
+	else {
+		view = glm::translate(view, view_translate);
+
+	}
+
 
 	// update uniforms & draw
 	glUniformMatrix4fv(proj_mat_location, 1, GL_FALSE, glm::value_ptr(persp_proj));
 	glUniformMatrix4fv(view_mat_location, 1, GL_FALSE, glm::value_ptr(view));
-
+	loadPlane(matrix_location);
 	loadTarget(matrix_location);
 
 	if (CCD_mode == 0) {
@@ -232,6 +272,8 @@ void display() {
 
 		loadLowerArm(modelLowerArm1, modelLowerArm2, matrix_location, translate_lower_arm2, rotate_lower_arm2);
 		loadHand(modelLowerArm2, modelHand, matrix_location);
+
+
 
 	}
 
@@ -281,13 +323,23 @@ void calcIKAnalytical() {
 }
 
 
-void calcAngle(float& rotation, glm::vec3& transformStart, glm::vec3& transformEnd)
+void calcAngle(glm::vec3& rotation, int rotation_axis, glm::vec3& transformStart, glm::vec3& transformEnd)
 {
-	float dist = glm::distance(transformStart, transformEnd);
-	rotation = glm::acos((transformStart.x - transformEnd.x) / dist);
+	int transform_axis = 0;
+	if (rotation_axis == 1) {
+		transform_axis = 2;
+	}
 
-	if (transformStart.y < transformEnd.y) {
-		rotation *= -1.0f;
+	float dist = glm::distance(transformStart, transformEnd);
+	rotation[rotation_axis] = glm::acos((transformStart[transform_axis] - transformEnd[transform_axis]) / dist);
+	
+	int position_axis = 1;
+	if (rotation_axis == 1) {
+		position_axis = 0;
+	}
+
+	if (transformStart[position_axis] < transformEnd[position_axis]) {
+		rotation[rotation_axis] *= -1.0f;
 	}
 
 }
@@ -297,21 +349,20 @@ float handLength = 0.8f;
 //based off whats seen in this video: https://www.youtube.com/shorts/MvuO9ZHGr6k
 //each frame a different link angle is calculated, this way no 'for' or 'while' loop is necessary and it results in a interpolated effect
 
-void calcCCD(int& frame_number, int number_of_links, glm::vec3* linkGlobalTransforms[], float& rotateBy, glm::vec3 target_transform) {
+void calcCCD(int& frame_number, int number_of_links, glm::vec3* linkGlobalTransforms[],int rotation_axis, float& rotateBy, glm::vec3 target_transform) {
 	glm::vec3 handTransform(modelHand[3]);
 	
 	glm::vec3 endOfChainTransform(modelEndOfChain[3]);
 
-	float endOfChainRotation = 0.0f;
+	glm::vec3 endOfChainRotation;
 	
 
-	float targetRotation;
-	calcAngle(targetRotation, (*linkGlobalTransforms[frame_number]), target_transform);
-	calcAngle(endOfChainRotation, (*linkGlobalTransforms[frame_number]), endOfChainTransform);
-	rotateBy = targetRotation - endOfChainRotation;
+	glm::vec3 targetRotation;
+	calcAngle(targetRotation, rotation_axis, (*linkGlobalTransforms[frame_number]), target_transform);
+	calcAngle(endOfChainRotation, rotation_axis, (*linkGlobalTransforms[frame_number]), endOfChainTransform);
+	rotateBy = targetRotation[rotation_axis] - endOfChainRotation[rotation_axis];
 
 	
-
 }
 
 void incrementFrameNumber(int& frame_number, int number_of_links)
@@ -332,8 +383,13 @@ int motionSpeed = 1;
 int frame_number = 0;
 
 int direc = 1;
-float radius = 2.1f;
+float radius = 5.0f;
 int radius_direc = 1;
+int rotation_axis = 2;
+
+bool Z_mode = false;
+
+
 void updateScene() {
 
 	static DWORD last_time = 0;
@@ -357,7 +413,6 @@ void updateScene() {
 
 		animateTarget();
 
-
 	}
 
 
@@ -371,10 +426,9 @@ void updateScene() {
 	}
 	else {
 		if (frame_count % motionSpeed == 0) {
-			float rotateBy;
 			
 
-			
+			float rotateBy;
 			glm::vec3 handTransform(modelHand[3]);
 			glm::vec3 lowerArmTransform1(modelLowerArm1[3]);
 			glm::vec3 lowerArmTransform2(modelLowerArm2[3]);
@@ -386,12 +440,12 @@ void updateScene() {
 				glm::vec3* linkGlobalTransforms[] = { &handTransform ,&lowerArmTransform1, &upperArmTransform };
 				glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm1, &rotate_upper_arm };
 
-				calcCCD(frame_number, 3, linkGlobalTransforms, rotateBy, transform_target);
+				calcCCD(frame_number, 3, linkGlobalTransforms,2, rotateBy, transform_target);
 				if (!turnoff) {
-					(*linkLocalRotations[frame_number]).z += rotateBy;
+					(*linkLocalRotations[frame_number])[2] += rotateBy;
 				}
 
-				targetRotations[frame_number] = (*linkLocalRotations[frame_number]).z + rotateBy;
+
 
 			}
 			if (CCD_mode == 2) {
@@ -399,34 +453,36 @@ void updateScene() {
 
 				glm::vec3* linkGlobalTransforms[] = { &handTransform , &lowerArmTransform2, &lowerArmTransform1, &upperArmTransform };
 				glm::vec3* linkLocalRotations[] = { &rotate_hand, &rotate_lower_arm2, &rotate_lower_arm1, &rotate_upper_arm };
+				glm::vec3 endOfChainPos(modelEndOfChain[3]);
 
-				calcCCD(frame_number, 4, linkGlobalTransforms, rotateBy, transform_target);
+				
+				rotation_axis = 2;
+				calcCCD(frame_number, 4, linkGlobalTransforms, rotation_axis, rotateBy, transform_target);
 
 				if (!turnoff) {
-					(*linkLocalRotations[frame_number]).z += rotateBy;
+					(*linkLocalRotations[frame_number])[rotation_axis] += rotateBy;
+
 				}
+				if (Z_mode) {
+					calcCCD(frame_number, 4, linkGlobalTransforms, 1, rotateBy, transform_target);
 
-				targetRotations[frame_number] = (*linkLocalRotations[frame_number]).z + rotateBy;
+					if (!turnoff) {
+						(*linkLocalRotations[frame_number])[1] += rotateBy;
 
-				if (interpolate) {
-
-					(*linkLocalRotations[frame_number]).z = targetRotations[frame_number];
-
-					interpolation_frames--;
-					if (interpolation_frames == 0) {
-						interpolate = false;
-						interpolation_frames = 1;
 					}
-
 				}
+				
+				
 
 			}
 			
-
+			
 			frame_number++;
-			if (frame_number == CCD_mode + 2) {
+			if (frame_number == (CCD_mode + 2)) {
 				frame_number = 0;
+
 			}
+			
 		}
 		
 
@@ -439,36 +495,60 @@ void updateScene() {
 	glutPostRedisplay();
 }
 
+//press 'o' to activate
+glm::vec3 animationPath[] = { glm::vec3(-5.0f,0,0), glm::vec3(0,4.0f,0), glm::vec3(4.0f,2.0f, 0.0f), glm::vec3(3.0f,-4.0f,0.0f),glm::vec3(-2.0f,1.0f,0.0f),glm::vec3(-5.0f,0,0) };
+int spline_index = 1;
+float curveX= 0.0f;
+float curveY = 0.0f;
+int y_direc = 1;
+int x_direc = 1;
+float prevY = 0.0f;
+float prevX = 0.0f;
+float lenX = 0.0f;
+float lenY = 0.0f;
+
+//parametric equation to join splines found here : https://math.stackexchange.com/questions/121720/ease-in-out-function/121755#121755
 void animateTarget()
 {
-	if (radius < 2.0f) {
-		radius_direc = +1;
+	
+	curveY = pow(curveX,2) / (2.0f * (pow(curveX, 2) - curveX) + 1.0f);
+
+	lenX = (animationPath[spline_index].x - animationPath[spline_index - 1].x);
+	lenY = (animationPath[spline_index].y - animationPath[spline_index - 1].y);
+
+	if (animationPath[spline_index].y > animationPath[spline_index - 1].y) {
+		transform_target.y = curveY * lenY + animationPath[spline_index-1].y;
 	}
-	if (radius > 5.0f) {
-		radius_direc = -1;
+	else {
+		transform_target.y = (1-curveY) * -lenY + animationPath[spline_index].y;
+	}
+	
+	/*
+	if (splinePath[spline_index].x > splinePath[spline_index - 1].x ) {
+		transform_target.x += (curveX-prevX) * lenX;
+	}
+	else {
+		transform_target.x -= (curveX - prevX) * lenX;
+	}
+	*/
+	
+	transform_target.x += 0.0015f * lenX;
+	curveX += 0.0015f;
+
+	if (abs(glm::distance(transform_target,animationPath[spline_index])) < 0.005f ) {
+		transform_target = animationPath[spline_index];
+		spline_index++;
+		
+		std::cout << "TARGET REACHED" << sizeof(animationPath)/ sizeof(animationPath[0]) << std::endl;
+		std::cout << transform_target.x << " " << transform_target.y << std::endl;
+		if (animationPath[spline_index-1].x==-5.0f) {
+			animate_target = false;
+		}
+		curveX = 0.0f;
+		curveY = 0.0f;
 	}
 
-
-	std::cout << transform_target.y << std::endl;
-	std::cout << transform_target.x << std::endl;
-	std::cout << radius << std::endl;
-
-	float speed = abs(transform_target.y / 200);
-
-	transform_target.x += speed * direc;
-
-	if (abs(transform_target.x) > radius) {
-		transform_target.x = (radius - 0.0001f) * direc;
-		direc *= -1;
-	}
-
-
-	transform_target.y = sqrt(pow(radius, 2) - pow(transform_target.x, 2)) * direc;
-
-	//radius += 0.002f * radius_direc;
 }
-
-
 
 
 void init()
@@ -533,14 +613,18 @@ void keypress(unsigned char key, int x, int y) {
 	if (key == 'n') {
 		motionSpeed = 1.0f;
 	}
+	if (key == 'z') {
+		Z_mode = true;
+	}
 
 	if (key == 'o') {
 		
-		if (!animate_target) {
-			animate_target = true;
+		transform_target = animationPath[0];
+		if (animate_target) {
+			animate_target = false;
 		}
 		else {
-			animate_target = false;
+			animate_target = true;
 		}
 	}
 
